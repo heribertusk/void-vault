@@ -5,7 +5,7 @@ node_modules/
 
 # Build output
 dist/
-functions/
+/functions/
 
 # Environment files
 .env
