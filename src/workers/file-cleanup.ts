@@ -48,3 +48,13 @@ export const scheduled = async (
 ): Promise<void> => {
   ctx.waitUntil(cleanupExpiredFiles(env, event))
 }
+
+export default {
+  async scheduled(
+    event: ScheduledEvent,
+    env: Env,
+    ctx: ExecutionContext
+  ): Promise<void> {
+    ctx.waitUntil(cleanupExpiredFiles(env, event))
+  }
+}

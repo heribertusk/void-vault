@@ -1,0 +1,15 @@
+name = "void-vault-cleanup"
+compatibility_date = "2024-01-01"
+main = "src/workers/file-cleanup.ts"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "void-vault-db"
+database_id = "local"  # Will be replaced by GitHub Actions with production ID
+
+[[r2_buckets]]
+binding = "R2"
+bucket_name = "void-vault-storage"
+
+[triggers]
+crons = ["0 * * * *"]  # Run every hour at minute 0

@@ -20,7 +20,8 @@
     "test:coverage": "vitest --coverage",
     "cf:dev": "wrangler pages dev --port 8788",
     "cf:deploy": "wrangler pages deploy",
-    "cf:d1:migrate": "wrangler d1 migrations apply void-vault-db --local"
+    "cf:d1:migrate": "wrangler d1 migrations apply void-vault-db --local",
+    "deploy:all": "bash scripts/deploy.sh"
   },
   "dependencies": {
     "vue": "^3.4.0",

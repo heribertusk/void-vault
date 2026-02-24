@@ -18,7 +18,7 @@ Secure file transfer system with zero-knowledge encryption and trusted device ve
 ### Secure File Transfer
 - Self-destructing links with TTL (1 hour to 7 days)
 - Download limit enforcement (1 to unlimited)
-- Automatic file expiration and R2 cleanup
+- **Automatic file expiration** (hourly cron job deletes expired files)
 - Encrypted storage in Cloudflare R2
 
 ### Security Features
@@ -28,10 +28,54 @@ Secure file transfer system with zero-knowledge encryption and trusted device ve
 - File type validation (whitelist approach)
 - No keys/secrets logged or exposed
 
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     Cloudflare Pages                         │
+│  ┌───────────────────────────────────────────────────────┐  │
+│  │         Frontend (Vue 3 + Vite + TailwindCSS)         │  │
+│  │                   PWA (Progressive Web App)            │  │
+│  └───────────────────────────────────────────────────────┘  │
+│  ┌───────────────────────────────────────────────────────┐  │
+│  │         Pages Functions (TypeScript API)              │  │
+│  │  ┌─────────┐ ┌──────────┐ ┌──────────┐ ┌─────────┐  │  │
+│  │  │  Auth   │ │ Devices  │ │  Files   │ │Download │  │  │
+│  │  └─────────┘ └──────────┘ └──────────┘ └─────────┘  │  │
+│  └───────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────┘
+                            │
+                            │ HTTP API
+                            ▼
+┌─────────────────────────────────────────────────────────────┐
+│                   Cloudflare Services                        │
+│  ┌───────────────────┐     ┌───────────────────────────┐   │
+│  │   D1 Database     │     │      R2 Storage           │   │
+│  │   (SQLite)        │◄───►│  (Encrypted Files)        │   │
+│  │  • Users          │     │  • File Storage           │   │
+│  │  • Devices        │     │  • Auto-TTL Cleanup       │   │
+│  │  • Files          │     │                           │   │
+│  └───────────────────┘     └───────────────────────────┘   │
+│                              ▲                              │
+│                              │ Scheduled Trigger             │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │   Cleanup Worker (Hourly Cron Job)                  │   │
+│  │  • Delete expired files from R2 & D1                │   │
+│  │  • Cleanup old upload logs                          │   │
+│  └─────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Data Flow:**
+1. **Upload:** Client encrypts → Pages Function → R2 storage + D1 metadata
+2. **Download:** Client requests → Pages Function validates → R2 fetch → Client decrypts
+3. **Cleanup:** Scheduled Worker runs hourly → Deletes expired files from R2 + D1
+
 ## Tech Stack
 
 - **Frontend**: Vue 3 + Vite + TailwindCSS (PWA)
 - **Backend**: Cloudflare Pages Functions (TypeScript)
+- **Background Jobs**: Cloudflare Workers (Scheduled tasks)
 - **Storage**: Cloudflare R2 (encrypted files)
 - **Database**: Cloudflare D1 (SQLite)
 - **Build**: Bun + Wrangler
@@ -167,13 +211,23 @@ void-vault/
 │   │       ├── devices/ # Device management
 │   │       ├── files/   # File operations
 │   │       └── download/# Download handler
+│   ├── workers/         # Cloudflare Workers (background jobs)
+│   │   └── file-cleanup.ts # Scheduled cleanup worker
 │   ├── middleware/      # Auth & device validation
 │   ├── utils/           # Crypto, validators, R2 client
 │   └── types/           # TypeScript definitions
 ├── migrations/          # D1 database migrations
 ├── tests/               # Vitest test files
+├── scripts/             # Deployment scripts
+│   └── deploy.sh        # Unified deploy script (Pages + Worker)
+├── wrangler.toml        # Cloudflare Pages config
+├── wrangler.worker.toml # Cleanup Worker config
+├── .github/
+│   └── workflows/
+│       └── deploy.yml   # GitHub Actions CI/CD
 ├── DECISIONS.md         # Technical decisions & rationale
-└── WORKFLOW.md          # Development workflow guide
+├── WORKFLOW.md          # Development workflow guide
+└── DEPLOYMENT.md        # Comprehensive deployment guide
 ```
 
 ## API Endpoints
