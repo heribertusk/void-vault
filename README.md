@@ -92,6 +92,68 @@ bun run build
 bun run cf:deploy
 ```
 
+## Deployment Options
+
+### Option A: Local Development (Default)
+```bash
+# wrangler.toml sudah configured dengan database_id = "local"
+bun run dev
+```
+
+### Option B: Production via GitHub Actions (Recommended)
+
+1. **Prepare Cloudflare Resources:**
+   ```bash
+   wrangler d1 create your-db-name  # Copy database_id from output
+   wrangler r2 bucket create your-bucket-name
+   wrangler d1 migrations apply your-db-name --remote
+   ```
+
+2. **Configure GitHub Secrets:**
+   
+   Go to: Repository → Settings → Secrets and variables → Actions → New repository secret
+   
+   **Required Secrets:**
+   - `CLOUDFLARE_API_TOKEN` - [Create token](https://dash.cloudflare.com/profile/api-tokens) with **Workers & Pages Edit** permissions
+   - `CLOUDFLARE_ACCOUNT_ID` - Your account ID from Cloudflare dashboard
+   - `CF_D1_DATABASE_ID` - Your D1 database ID (from `wrangler d1 list`)
+   
+   **Optional Secrets:**
+   - `CF_D1_DATABASE_NAME` - Override D1 database name (default: void-vault-db)
+   - `CF_R2_BUCKET_NAME` - Override R2 bucket name (default: void-vault-storage)
+
+3. **Set JWT Secret:**
+   ```bash
+   wrangler pages secret put JWT_SECRET --project-name=void-vault
+   # Generate secure secret: openssl rand -base64 32
+   ```
+
+4. **Deploy:**
+   ```bash
+   git push origin main
+   ```
+   GitHub Actions will automatically build and deploy.
+
+### Option C: Manual Production Deploy
+
+```bash
+# 1. Update wrangler.toml with production database_id
+#    Change: database_id = "local" → database_id = "your-production-id"
+
+# 2. Set JWT secret
+wrangler pages secret put JWT_SECRET --project-name=void-vault
+
+# 3. Build and deploy
+bun run build:frontend
+bun run copy:functions
+bunx wrangler pages deploy dist --project-name=void-vault
+
+# 4. Reset wrangler.toml back to local
+#    Change: database_id = "your-production-id" → database_id = "local"
+```
+
+**Note:** For detailed deployment guide, see [DEPLOYMENT.md](./DEPLOYMENT.md).
+
 ## Project Structure
 
 ```
