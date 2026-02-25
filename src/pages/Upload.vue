@@ -413,10 +413,7 @@ function resetUpload() {
             </button>
             <button
               class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
-              @click="
-                showRequestForm = false
-                requestError = null
-              "
+              @click="showRequestForm = false; requestError = null"
             >
               Cancel
             </button>
@@ -445,10 +442,7 @@ function resetUpload() {
             </button>
             <button
               class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
-              @click="
-                showTokenForm = false
-                tokenError = null
-              "
+              @click="showTokenForm = false; tokenError = null"
             >
               Cancel
             </button>
