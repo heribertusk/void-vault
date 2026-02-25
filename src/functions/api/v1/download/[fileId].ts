@@ -8,20 +8,19 @@ export const onRequestGet = async (
   const fileId = params.fileId as string | undefined
 
   if (!fileId || typeof fileId !== 'string') {
-    return new Response(
-      JSON.stringify({ success: false, error: { message: 'Invalid file ID' } }),
-      { status: 400, headers: { 'Content-Type': 'application/json' } }
-    )
+    return new Response(JSON.stringify({ success: false, error: { message: 'Invalid file ID' } }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' },
+    })
   }
 
-  const file = await env.DB
-    .prepare(
-      `SELECT
+  const file = await env.DB.prepare(
+    `SELECT
         id, original_name, file_size, mime_type,
         download_count, max_downloads, expires_at, iv
       FROM vault_files
       WHERE id = ?`
-    )
+  )
     .bind(fileId)
     .first<{
       id: string
@@ -36,7 +35,10 @@ export const onRequestGet = async (
 
   if (!file) {
     return new Response(
-      JSON.stringify({ success: false, error: { message: 'File tidak ditemukan atau telah dihapus' } }),
+      JSON.stringify({
+        success: false,
+        error: { message: 'File tidak ditemukan atau telah dihapus' },
+      }),
       { status: 404, headers: { 'Content-Type': 'application/json' } }
     )
   }
@@ -53,7 +55,10 @@ export const onRequestGet = async (
 
   if (file.max_downloads > 0 && file.download_count >= file.max_downloads) {
     return new Response(
-      JSON.stringify({ success: false, error: { message: 'Batas download telah tercapai (download limit exceeded)' } }),
+      JSON.stringify({
+        success: false,
+        error: { message: 'Batas download telah tercapai (download limit exceeded)' },
+      }),
       { status: 410, headers: { 'Content-Type': 'application/json' } }
     )
   }
@@ -64,6 +69,7 @@ export const onRequestGet = async (
       data: {
         originalName: file.original_name,
         fileSize: file.file_size,
+        mimeType: file.mime_type,
         iv: file.iv,
       },
     }),
@@ -83,20 +89,19 @@ export const onRequestPost = async (
   const fileId = params.fileId as string | undefined
 
   if (!fileId || typeof fileId !== 'string') {
-    return new Response(
-      JSON.stringify({ success: false, error: { message: 'Invalid file ID' } }),
-      { status: 400, headers: { 'Content-Type': 'application/json' } }
-    )
+    return new Response(JSON.stringify({ success: false, error: { message: 'Invalid file ID' } }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' },
+    })
   }
 
-  const file = await env.DB
-    .prepare(
-      `SELECT
+  const file = await env.DB.prepare(
+    `SELECT
         id, r2_key, original_name, mime_type,
         download_count, max_downloads, expires_at, iv
       FROM vault_files
       WHERE id = ?`
-    )
+  )
     .bind(fileId)
     .first<{
       id: string
@@ -111,7 +116,10 @@ export const onRequestPost = async (
 
   if (!file) {
     return new Response(
-      JSON.stringify({ success: false, error: { message: 'File tidak ditemukan atau telah dihapus' } }),
+      JSON.stringify({
+        success: false,
+        error: { message: 'File tidak ditemukan atau telah dihapus' },
+      }),
       { status: 404, headers: { 'Content-Type': 'application/json' } }
     )
   }
@@ -128,7 +136,10 @@ export const onRequestPost = async (
 
   if (file.max_downloads > 0 && file.download_count >= file.max_downloads) {
     return new Response(
-      JSON.stringify({ success: false, error: { message: 'Batas download telah tercapai (download limit exceeded)' } }),
+      JSON.stringify({
+        success: false,
+        error: { message: 'Batas download telah tercapai (download limit exceeded)' },
+      }),
       { status: 410, headers: { 'Content-Type': 'application/json' } }
     )
   }
@@ -142,10 +153,7 @@ export const onRequestPost = async (
     )
   }
 
-  await env.DB
-    .prepare(
-      'UPDATE vault_files SET download_count = download_count + 1 WHERE id = ?'
-    )
+  await env.DB.prepare('UPDATE vault_files SET download_count = download_count + 1 WHERE id = ?')
     .bind(fileId)
     .run()
 
@@ -165,6 +173,7 @@ export const onRequestPost = async (
       data: {
         encryptedData: base64Data,
         originalName: file.original_name,
+        mimeType: file.mime_type,
         iv: file.iv,
         fileSize: fileData.byteLength,
       },

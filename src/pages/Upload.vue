@@ -133,6 +133,7 @@ async function handleUpload(data: {
   iv: string
   originalName: string
   fileSize: number
+  mimeType: string
 }) {
   if (!isOnline.value) {
     showOfflineWarning.value = true
@@ -162,6 +163,7 @@ async function handleUpload(data: {
     formData.append('file', data.encryptedFile)
     formData.append('originalName', data.originalName)
     formData.append('fileSize', data.fileSize.toString())
+    formData.append('mimeType', data.mimeType)
     formData.append('iv', data.iv)
     formData.append('expires_in_hours', selectedExpiration.value.toString())
     formData.append('max_downloads', selectedDownloadLimit.value.toString())
@@ -241,13 +243,25 @@ function resetUpload() {
   <div class="min-h-screen bg-gray-900 text-white p-8">
     <div class="max-w-2xl mx-auto space-y-8">
       <div class="text-center">
-        <h1 class="text-3xl font-bold mb-2">VoidVault</h1>
-        <p class="text-gray-400">Secure, encrypted file sharing</p>
+        <h1 class="text-3xl font-bold mb-2">
+          VoidVault
+        </h1>
+        <p class="text-gray-400">
+          Secure, encrypted file sharing
+        </p>
       </div>
 
-      <div v-if="showOfflineWarning" class="bg-red-900/30 border border-red-700 rounded-lg p-4">
+      <div
+        v-if="showOfflineWarning"
+        class="bg-red-900/30 border border-red-700 rounded-lg p-4"
+      >
         <p class="text-red-400 flex items-center gap-2">
-          <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg
+            class="h-5 w-5"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
             <path
               stroke-linecap="round"
               stroke-linejoin="round"
@@ -259,19 +273,28 @@ function resetUpload() {
         </p>
       </div>
 
-      <div v-if="uploadError" class="bg-red-900/30 border border-red-700 rounded-lg p-4">
+      <div
+        v-if="uploadError"
+        class="bg-red-900/30 border border-red-700 rounded-lg p-4"
+      >
         <p class="text-red-400">
           {{ uploadError }}
         </p>
       </div>
 
-      <div v-if="tokenError" class="bg-red-900/30 border border-red-700 rounded-lg p-4">
+      <div
+        v-if="tokenError"
+        class="bg-red-900/30 border border-red-700 rounded-lg p-4"
+      >
         <p class="text-red-400">
           {{ tokenError }}
         </p>
       </div>
 
-      <div v-if="isUploading" class="bg-gray-800 rounded-lg p-6 space-y-4">
+      <div
+        v-if="isUploading"
+        class="bg-gray-800 rounded-lg p-6 space-y-4"
+      >
         <div class="text-center">
           <h2 class="text-xl font-semibold text-gray-200 mb-4">
             {{ uploadStage === 'encrypting' ? 'Encrypting File...' : 'Uploading...' }}
@@ -293,19 +316,34 @@ function resetUpload() {
           </div>
         </div>
 
-        <div v-if="uploadStage === 'uploading'" class="text-center text-gray-400 text-sm">
+        <div
+          v-if="uploadStage === 'uploading'"
+          class="text-center text-gray-400 text-sm"
+        >
           <p>Uploading {{ uploadProgress < 100 ? 'to server' : 'complete' }}...</p>
-          <p class="mt-1">Please don't close this page.</p>
+          <p class="mt-1">
+            Please don't close this page.
+          </p>
         </div>
       </div>
 
-      <div v-else-if="!deviceToken" class="bg-gray-800 rounded-lg p-6 space-y-4">
+      <div
+        v-else-if="!deviceToken"
+        class="bg-gray-800 rounded-lg p-6 space-y-4"
+      >
         <div class="text-center">
-          <h2 class="text-xl font-semibold text-gray-200 mb-2">Device Registration Required</h2>
-          <p class="text-gray-400 text-sm">Request access or enter your device token below.</p>
+          <h2 class="text-xl font-semibold text-gray-200 mb-2">
+            Device Registration Required
+          </h2>
+          <p class="text-gray-400 text-sm">
+            Request access or enter your device token below.
+          </p>
         </div>
 
-        <div v-if="requestSuccess" class="bg-green-900/30 border border-green-700 rounded-lg p-4">
+        <div
+          v-if="requestSuccess"
+          class="bg-green-900/30 border border-green-700 rounded-lg p-4"
+        >
           <p class="text-green-400">
             Request submitted! An administrator will review and approve your device.
           </p>
@@ -317,7 +355,10 @@ function resetUpload() {
           </button>
         </div>
 
-        <div v-else-if="requestError" class="bg-red-900/30 border border-red-700 rounded-lg p-4">
+        <div
+          v-else-if="requestError"
+          class="bg-red-900/30 border border-red-700 rounded-lg p-4"
+        >
           <p class="text-red-400">
             {{ requestError }}
           </p>
@@ -340,7 +381,10 @@ function resetUpload() {
           </div>
         </div>
 
-        <div v-if="showRequestForm && !requestSuccess" class="space-y-4">
+        <div
+          v-if="showRequestForm && !requestSuccess"
+          class="space-y-4"
+        >
           <div>
             <label class="block text-gray-400 text-sm mb-2"> Your Email </label>
             <input
@@ -348,7 +392,7 @@ function resetUpload() {
               type="email"
               placeholder="your@email.com"
               class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-gray-300"
-            />
+            >
           </div>
           <div>
             <label class="block text-gray-400 text-sm mb-2"> Device Name </label>
@@ -357,7 +401,7 @@ function resetUpload() {
               type="text"
               placeholder="e.g., My Laptop, iPhone 15"
               class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-gray-300"
-            />
+            >
           </div>
           <div class="flex gap-2">
             <button
@@ -369,14 +413,20 @@ function resetUpload() {
             </button>
             <button
               class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
-              @click="showRequestForm = false; requestError = null"
+              @click="
+                showRequestForm = false
+                requestError = null
+              "
             >
               Cancel
             </button>
           </div>
         </div>
 
-        <div v-if="showTokenForm" class="space-y-4">
+        <div
+          v-if="showTokenForm"
+          class="space-y-4"
+        >
           <div>
             <label class="block text-gray-400 text-sm mb-2"> Device Token </label>
             <input
@@ -384,7 +434,7 @@ function resetUpload() {
               type="text"
               placeholder="Paste your device token here..."
               class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-gray-300 font-mono text-sm"
-            />
+            >
           </div>
           <div class="flex gap-2">
             <button
@@ -395,8 +445,10 @@ function resetUpload() {
             </button>
             <button
               class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
-              
-              @click="showTokenForm = false; tokenError = null"
+              @click="
+                showTokenForm = false
+                tokenError = null
+              "
             >
               Cancel
             </button>
@@ -409,7 +461,12 @@ function resetUpload() {
         class="bg-gray-800/50 border border-gray-700 rounded-lg p-3 flex items-center justify-between"
       >
         <div class="flex items-center gap-2 text-sm">
-          <svg class="h-4 w-4 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg
+            class="h-4 w-4 text-green-400"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
             <path
               stroke-linecap="round"
               stroke-linejoin="round"
@@ -444,7 +501,11 @@ function resetUpload() {
                 v-model="selectedExpiration"
                 class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-gray-300"
               >
-                <option v-for="opt in expirationOptions" :key="opt.value" :value="opt.value">
+                <option
+                  v-for="opt in expirationOptions"
+                  :key="opt.value"
+                  :value="opt.value"
+                >
                   {{ opt.label }}
                 </option>
               </select>
@@ -456,7 +517,11 @@ function resetUpload() {
                 v-model="selectedDownloadLimit"
                 class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-gray-300"
               >
-                <option v-for="opt in downloadLimitOptions" :key="opt.value" :value="opt.value">
+                <option
+                  v-for="opt in downloadLimitOptions"
+                  :key="opt.value"
+                  :value="opt.value"
+                >
                   {{ opt.label }}
                 </option>
               </select>
@@ -465,14 +530,23 @@ function resetUpload() {
         </div>
 
         <div class="mt-6 text-center">
-          <router-link to="/login" class="text-blue-400 hover:text-blue-300 text-sm">
+          <router-link
+            to="/login"
+            class="text-blue-400 hover:text-blue-300 text-sm"
+          >
             Admin Login
           </router-link>
         </div>
       </div>
 
-      <div v-else class="space-y-4">
-        <ShareableLink :file-id="uploadResult.fileId" :encryption-key="uploadResult.key" />
+      <div
+        v-else
+        class="space-y-4"
+      >
+        <ShareableLink
+          :file-id="uploadResult.fileId"
+          :encryption-key="uploadResult.key"
+        />
 
         <button
           class="w-full py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"

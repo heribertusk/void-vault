@@ -7,7 +7,16 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  upload: [data: { encryptedFile: File; key: string; iv: string; originalName: string; fileSize: number }]
+  upload: [
+    data: {
+      encryptedFile: File
+      key: string
+      iv: string
+      originalName: string
+      fileSize: number
+      mimeType: string
+    },
+  ]
   error: [message: string]
   encrypting: [progress: number]
 }>()
@@ -77,6 +86,7 @@ async function handleEncrypt() {
       iv: encrypted.iv,
       originalName: file.value.name,
       fileSize: file.value.size,
+      mimeType: file.value.type,
     })
 
     emit('encrypting', 100)
@@ -126,7 +136,9 @@ function clearFile() {
           Drop your file here or
         </p>
         <label class="cursor-pointer">
-          <span class="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg inline-block transition-colors">
+          <span
+            class="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg inline-block transition-colors"
+          >
             Browse Files
           </span>
           <input

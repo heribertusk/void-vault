@@ -6,13 +6,7 @@ import {
   calculateExpiresAt,
   getAllowedExtensions,
 } from '@utils/file-validator'
-import {
-  uploadToR2,
-  generateR2Key,
-  checkRateLimit,
-  logUpload,
-  type Env,
-} from '@utils/r2-client'
+import { uploadToR2, generateR2Key, checkRateLimit, logUpload, type Env } from '@utils/r2-client'
 import { generateId } from '@utils/crypto'
 import { requireDeviceAuth } from '@middleware/device-auth'
 
@@ -21,6 +15,7 @@ interface UploadFormData {
   max_downloads: string
   expires_in_hours: string
   iv: string
+  mimeType: string
 }
 
 async function parseFormData(request: Request): Promise<UploadFormData | null> {
@@ -35,8 +30,15 @@ async function parseFormData(request: Request): Promise<UploadFormData | null> {
   const maxDownloads = formData.get('max_downloads')
   const expiresInHours = formData.get('expires_in_hours')
   const iv = formData.get('iv')
+  const mimeType = formData.get('mimeType')
 
-  if (!(file instanceof File) || !maxDownloads || !expiresInHours || typeof iv !== 'string') {
+  if (
+    !(file instanceof File) ||
+    !maxDownloads ||
+    !expiresInHours ||
+    typeof iv !== 'string' ||
+    typeof mimeType !== 'string'
+  ) {
     return null
   }
 
@@ -45,6 +47,7 @@ async function parseFormData(request: Request): Promise<UploadFormData | null> {
     max_downloads: maxDownloads.toString(),
     expires_in_hours: expiresInHours.toString(),
     iv,
+    mimeType,
   }
 }
 
@@ -63,10 +66,10 @@ export const onRequestPost = async (
   const formData = await parseFormData(request)
 
   if (!formData) {
-    return new Response(
-      JSON.stringify({ error: 'Invalid form data' }),
-      { status: 400, headers: { 'Content-Type': 'application/json' } }
-    )
+    return new Response(JSON.stringify({ error: 'Invalid form data' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' },
+    })
   }
 
   const maxDownloads = parseInt(formData.max_downloads, 10)
@@ -75,39 +78,38 @@ export const onRequestPost = async (
 
   const dlLimitValidation = validateDownloadLimit(maxDownloads)
   if (!dlLimitValidation.valid) {
-    return new Response(
-      JSON.stringify({ error: dlLimitValidation.error }),
-      { status: 400, headers: { 'Content-Type': 'application/json' } }
-    )
+    return new Response(JSON.stringify({ error: dlLimitValidation.error }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' },
+    })
   }
 
   const expValidation = validateExpiration(expiresInHours)
   if (!expValidation.valid) {
-    return new Response(
-      JSON.stringify({ error: expValidation.error }),
-      { status: 400, headers: { 'Content-Type': 'application/json' } }
-    )
+    return new Response(JSON.stringify({ error: expValidation.error }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' },
+    })
   }
 
   const sizeValidation = validateFileSize(formData.file.size)
   if (!sizeValidation.valid) {
-    return new Response(
-      JSON.stringify({ error: sizeValidation.error }),
-      { status: 400, headers: { 'Content-Type': 'application/json' } }
-    )
+    return new Response(JSON.stringify({ error: sizeValidation.error }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' },
+    })
   }
 
   const allowedExtensions = await getAllowedExtensions(env.DB)
   const extValidation = validateFileExtension(formData.file.name, allowedExtensions)
   if (!extValidation.valid) {
-    return new Response(
-      JSON.stringify({ error: extValidation.error }),
-      { status: 400, headers: { 'Content-Type': 'application/json' } }
-    )
+    return new Response(JSON.stringify({ error: extValidation.error }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' },
+    })
   }
 
-  const user = await env.DB
-    .prepare('SELECT unlimited_upload FROM users WHERE id = ?')
+  const user = await env.DB.prepare('SELECT unlimited_upload FROM users WHERE id = ?')
     .bind(device.userId)
     .first<{ unlimited_upload: number }>()
 
@@ -135,19 +137,18 @@ export const onRequestPost = async (
 
   const expiresAt = calculateExpiresAt(expiresInHours)
 
-  await env.DB
-    .prepare(
-      `INSERT INTO vault_files
+  await env.DB.prepare(
+    `INSERT INTO vault_files
         (id, user_id, r2_key, original_name, file_size, mime_type, download_count, max_downloads, expires_at, created_at, iv)
        VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)`
-    )
+  )
     .bind(
       fileId,
       device.userId,
       r2Key,
       formData.file.name,
       formData.file.size,
-      formData.file.type,
+      formData.mimeType,
       maxDownloads,
       expiresAt,
       new Date().toISOString(),

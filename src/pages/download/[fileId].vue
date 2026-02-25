@@ -8,12 +8,14 @@ import type { ApiResponse } from '@/types/api'
 interface FileInfoResponse {
   originalName: string
   fileSize: number
+  mimeType: string
   iv: string
 }
 
 interface DownloadResponse {
   encryptedData: string
   originalName: string
+  mimeType: string
   iv: string
 }
 
@@ -86,7 +88,7 @@ async function handleDownload() {
       throw new Error(data.error?.message || 'Invalid response')
     }
 
-    const { encryptedData, originalName, iv } = data.data
+    const { encryptedData, originalName, mimeType, iv } = data.data
 
     const binaryString = atob(encryptedData)
     const bytes = new Uint8Array(binaryString.length)
@@ -96,8 +98,8 @@ async function handleDownload() {
 
     const decryptedBuffer = await decryptFile(bytes.buffer, keyHex, iv)
 
-    const blob = new Blob([decryptedBuffer])
-    
+    const blob = new Blob([decryptedBuffer], { type: mimeType })
+
     const cleanFileName = originalName.replace(/\.encrypted$/, '')
     triggerDownload(blob, cleanFileName)
   } catch (err) {
@@ -210,7 +212,8 @@ onMounted(() => {
           class="bg-yellow-900/30 border border-yellow-500 rounded-lg p-4"
         >
           <p class="text-yellow-400 text-sm">
-            Warning: No decryption key found in URL. You need the complete link to download this file.
+            Warning: No decryption key found in URL. You need the complete link to download this
+            file.
           </p>
         </div>
 
