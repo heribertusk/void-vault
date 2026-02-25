@@ -18,6 +18,14 @@ const requestDeviceName = ref('')
 const isRequesting = ref(false)
 const requestSuccess = ref(false)
 const requestError = ref<string | null>(null)
+const uploadProgress = ref(0)
+const uploadStage = ref<'encrypting' | 'uploading' | 'complete'>('encrypting')
+
+function handleEncryptingProgress(progress: number) {
+  if (uploadStage.value === 'encrypting') {
+    uploadProgress.value = progress
+  }
+}
 
 const expirationOptions = [
   { label: '1 Hour', value: 1 },
@@ -84,7 +92,12 @@ async function requestDeviceAccess() {
       }),
     })
 
-    const data = await response.json() as { success?: boolean; message?: string; error?: string; code?: string }
+    const data = (await response.json()) as {
+      success?: boolean
+      message?: string
+      error?: string
+      code?: string
+    }
 
     if (!response.ok) {
       throw new Error(data.message || data.error || data.code || 'Request failed')
@@ -110,12 +123,17 @@ async function requestDeviceAccess() {
 
 function handleUploadError(message: string) {
   uploadError.value = message
-  setTimeout(() => {
-    uploadError.value = null
-  }, 5000)
+  uploadProgress.value = 0
+  uploadStage.value = 'encrypting'
 }
 
-async function handleUpload(data: { encryptedFile: File; key: string; iv: string; originalName: string; fileSize: number }) {
+async function handleUpload(data: {
+  encryptedFile: File
+  key: string
+  iv: string
+  originalName: string
+  fileSize: number
+}) {
   if (!isOnline.value) {
     showOfflineWarning.value = true
     uploadError.value = 'Connection required. Please check your internet connection.'
@@ -136,6 +154,8 @@ async function handleUpload(data: { encryptedFile: File; key: string; iv: string
 
   isUploading.value = true
   uploadError.value = null
+  uploadProgress.value = 0
+  uploadStage.value = 'encrypting'
 
   try {
     const formData = new FormData()
@@ -146,30 +166,66 @@ async function handleUpload(data: { encryptedFile: File; key: string; iv: string
     formData.append('expires_in_hours', selectedExpiration.value.toString())
     formData.append('max_downloads', selectedDownloadLimit.value.toString())
 
-    const response = await fetch('/api/v1/files/upload', {
-      method: 'POST',
-      headers: {
-        'X-Device-Token': deviceToken.value,
-      },
-      body: formData,
+    uploadStage.value = 'uploading'
+    uploadProgress.value = 0
+
+    await new Promise<void>((resolve, reject) => {
+      const xhr = new XMLHttpRequest()
+
+      xhr.upload.addEventListener('progress', (event) => {
+        if (event.lengthComputable) {
+          uploadProgress.value = Math.round((event.loaded / event.total) * 100)
+        }
+      })
+
+      xhr.addEventListener('load', () => {
+        if (xhr.status === 0) {
+          reject(new Error('Network error. Please check your connection and try again.'))
+          return
+        }
+
+        if (xhr.status === 201) {
+          const result = JSON.parse(xhr.responseText) as { file_id: string }
+          uploadResult.value = {
+            fileId: result.file_id,
+            key: data.key,
+            iv: data.iv,
+          }
+          uploadProgress.value = 100
+          uploadStage.value = 'complete'
+          resolve()
+        } else {
+          let errorMessage = 'Upload failed'
+          try {
+            const errorData = JSON.parse(xhr.responseText) as { error?: string }
+            errorMessage = errorData.error || `Upload failed with status ${xhr.status}`
+          } catch {
+            errorMessage = `Upload failed with status ${xhr.status}`
+          }
+          reject(new Error(errorMessage))
+        }
+      })
+
+      xhr.addEventListener('error', () => {
+        reject(new Error('Network error. Please check your connection and try again.'))
+      })
+
+      xhr.addEventListener('abort', () => {
+        reject(new Error('Upload was cancelled.'))
+      })
+
+      xhr.addEventListener('timeout', () => {
+        reject(new Error('Upload timeout. Please check your connection and try again.'))
+      })
+
+      xhr.timeout = 300000
+
+      xhr.open('POST', '/api/v1/files/upload')
+      xhr.setRequestHeader('X-Device-Token', deviceToken.value!)
+      xhr.send(formData)
     })
-
-    if (!response.ok) {
-      const errorData = (await response.json()) as { error?: string }
-      throw new Error(errorData.error || 'Upload failed')
-    }
-
-    const result = (await response.json()) as { file_id: string }
-    uploadResult.value = {
-      fileId: result.file_id,
-      key: data.key,
-      iv: data.iv,
-    }
   } catch (err) {
-    uploadError.value = err instanceof Error ? err.message : 'Upload failed'
-    setTimeout(() => {
-      uploadError.value = null
-    }, 5000)
+    handleUploadError(err instanceof Error ? err.message : 'Upload failed')
   } finally {
     isUploading.value = false
   }
@@ -185,25 +241,13 @@ function resetUpload() {
   <div class="min-h-screen bg-gray-900 text-white p-8">
     <div class="max-w-2xl mx-auto space-y-8">
       <div class="text-center">
-        <h1 class="text-3xl font-bold mb-2">
-          VoidVault
-        </h1>
-        <p class="text-gray-400">
-          Secure, encrypted file sharing
-        </p>
+        <h1 class="text-3xl font-bold mb-2">VoidVault</h1>
+        <p class="text-gray-400">Secure, encrypted file sharing</p>
       </div>
 
-      <div
-        v-if="showOfflineWarning"
-        class="bg-red-900/30 border border-red-700 rounded-lg p-4"
-      >
+      <div v-if="showOfflineWarning" class="bg-red-900/30 border border-red-700 rounded-lg p-4">
         <p class="text-red-400 flex items-center gap-2">
-          <svg
-            class="h-5 w-5"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
+          <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path
               stroke-linecap="round"
               stroke-linejoin="round"
@@ -215,41 +259,53 @@ function resetUpload() {
         </p>
       </div>
 
-      <div
-        v-if="uploadError"
-        class="bg-red-900/30 border border-red-700 rounded-lg p-4"
-      >
+      <div v-if="uploadError" class="bg-red-900/30 border border-red-700 rounded-lg p-4">
         <p class="text-red-400">
           {{ uploadError }}
         </p>
       </div>
 
-      <div
-        v-if="tokenError"
-        class="bg-red-900/30 border border-red-700 rounded-lg p-4"
-      >
+      <div v-if="tokenError" class="bg-red-900/30 border border-red-700 rounded-lg p-4">
         <p class="text-red-400">
           {{ tokenError }}
         </p>
       </div>
 
-      <div
-        v-if="!deviceToken"
-        class="bg-gray-800 rounded-lg p-6 space-y-4"
-      >
+      <div v-if="isUploading" class="bg-gray-800 rounded-lg p-6 space-y-4">
         <div class="text-center">
-          <h2 class="text-xl font-semibold text-gray-200 mb-2">
-            Device Registration Required
+          <h2 class="text-xl font-semibold text-gray-200 mb-4">
+            {{ uploadStage === 'encrypting' ? 'Encrypting File...' : 'Uploading...' }}
           </h2>
-          <p class="text-gray-400 text-sm">
-            Request access or enter your device token below.
-          </p>
         </div>
 
-        <div
-          v-if="requestSuccess"
-          class="bg-green-900/30 border border-green-700 rounded-lg p-4"
-        >
+        <div class="space-y-2">
+          <div class="w-full bg-gray-700 rounded-full h-3">
+            <div
+              class="bg-blue-500 h-3 rounded-full transition-all duration-300"
+              :style="{ width: `${uploadProgress}%` }"
+            />
+          </div>
+          <div class="flex justify-between text-sm">
+            <span class="text-gray-400">
+              {{ uploadStage === 'encrypting' ? 'Encryption' : 'Upload' }} Progress
+            </span>
+            <span class="text-gray-300">{{ uploadProgress }}%</span>
+          </div>
+        </div>
+
+        <div v-if="uploadStage === 'uploading'" class="text-center text-gray-400 text-sm">
+          <p>Uploading {{ uploadProgress < 100 ? 'to server' : 'complete' }}...</p>
+          <p class="mt-1">Please don't close this page.</p>
+        </div>
+      </div>
+
+      <div v-else-if="!deviceToken" class="bg-gray-800 rounded-lg p-6 space-y-4">
+        <div class="text-center">
+          <h2 class="text-xl font-semibold text-gray-200 mb-2">Device Registration Required</h2>
+          <p class="text-gray-400 text-sm">Request access or enter your device token below.</p>
+        </div>
+
+        <div v-if="requestSuccess" class="bg-green-900/30 border border-green-700 rounded-lg p-4">
           <p class="text-green-400">
             Request submitted! An administrator will review and approve your device.
           </p>
@@ -261,10 +317,7 @@ function resetUpload() {
           </button>
         </div>
 
-        <div
-          v-else-if="requestError"
-          class="bg-red-900/30 border border-red-700 rounded-lg p-4"
-        >
+        <div v-else-if="requestError" class="bg-red-900/30 border border-red-700 rounded-lg p-4">
           <p class="text-red-400">
             {{ requestError }}
           </p>
@@ -287,31 +340,24 @@ function resetUpload() {
           </div>
         </div>
 
-        <div
-          v-if="showRequestForm && !requestSuccess"
-          class="space-y-4"
-        >
+        <div v-if="showRequestForm && !requestSuccess" class="space-y-4">
           <div>
-            <label class="block text-gray-400 text-sm mb-2">
-              Your Email
-            </label>
+            <label class="block text-gray-400 text-sm mb-2"> Your Email </label>
             <input
               v-model="requestEmail"
               type="email"
               placeholder="your@email.com"
               class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-gray-300"
-            >
+            />
           </div>
           <div>
-            <label class="block text-gray-400 text-sm mb-2">
-              Device Name
-            </label>
+            <label class="block text-gray-400 text-sm mb-2"> Device Name </label>
             <input
               v-model="requestDeviceName"
               type="text"
               placeholder="e.g., My Laptop, iPhone 15"
               class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-gray-300"
-            >
+            />
           </div>
           <div class="flex gap-2">
             <button
@@ -330,20 +376,15 @@ function resetUpload() {
           </div>
         </div>
 
-        <div
-          v-if="showTokenForm"
-          class="space-y-4"
-        >
+        <div v-if="showTokenForm" class="space-y-4">
           <div>
-            <label class="block text-gray-400 text-sm mb-2">
-              Device Token
-            </label>
+            <label class="block text-gray-400 text-sm mb-2"> Device Token </label>
             <input
               v-model="tokenInput"
               type="text"
               placeholder="Paste your device token here..."
               class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-gray-300 font-mono text-sm"
-            >
+            />
           </div>
           <div class="flex gap-2">
             <button
@@ -354,6 +395,7 @@ function resetUpload() {
             </button>
             <button
               class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
+              
               @click="showTokenForm = false; tokenError = null"
             >
               Cancel
@@ -367,12 +409,7 @@ function resetUpload() {
         class="bg-gray-800/50 border border-gray-700 rounded-lg p-3 flex items-center justify-between"
       >
         <div class="flex items-center gap-2 text-sm">
-          <svg
-            class="h-4 w-4 text-green-400"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
+          <svg class="h-4 w-4 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path
               stroke-linecap="round"
               stroke-linejoin="round"
@@ -397,6 +434,7 @@ function resetUpload() {
             :max-file-size="100 * 1024 * 1024"
             @upload="handleUpload"
             @error="handleUploadError"
+            @encrypting="handleEncryptingProgress"
           />
 
           <div class="grid grid-cols-2 gap-4">
@@ -406,11 +444,7 @@ function resetUpload() {
                 v-model="selectedExpiration"
                 class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-gray-300"
               >
-                <option
-                  v-for="opt in expirationOptions"
-                  :key="opt.value"
-                  :value="opt.value"
-                >
+                <option v-for="opt in expirationOptions" :key="opt.value" :value="opt.value">
                   {{ opt.label }}
                 </option>
               </select>
@@ -422,11 +456,7 @@ function resetUpload() {
                 v-model="selectedDownloadLimit"
                 class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-gray-300"
               >
-                <option
-                  v-for="opt in downloadLimitOptions"
-                  :key="opt.value"
-                  :value="opt.value"
-                >
+                <option v-for="opt in downloadLimitOptions" :key="opt.value" :value="opt.value">
                   {{ opt.label }}
                 </option>
               </select>
@@ -435,24 +465,15 @@ function resetUpload() {
         </div>
 
         <div class="mt-6 text-center">
-          <router-link
-            to="/login"
-            class="text-blue-400 hover:text-blue-300 text-sm"
-          >
+          <router-link to="/login" class="text-blue-400 hover:text-blue-300 text-sm">
             Admin Login
           </router-link>
         </div>
       </div>
 
-      <div
-        v-else
-        class="space-y-4"
-      >
-        <ShareableLink
-          :file-id="uploadResult.fileId"
-          :encryption-key="uploadResult.key"
-        />
-        
+      <div v-else class="space-y-4">
+        <ShareableLink :file-id="uploadResult.fileId" :encryption-key="uploadResult.key" />
+
         <button
           class="w-full py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
           @click="resetUpload"

@@ -9,6 +9,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   upload: [data: { encryptedFile: File; key: string; iv: string; originalName: string; fileSize: number }]
   error: [message: string]
+  encrypting: [progress: number]
 }>()
 
 const { encryptFile } = useEncryption()
@@ -53,10 +54,13 @@ async function handleEncrypt() {
 
   isEncrypting.value = true
   progress.value = 0
+  emit('encrypting', 0)
 
   try {
+    emit('encrypting', 20)
     progress.value = 30
     const encrypted = await encryptFile(file.value)
+    emit('encrypting', 60)
     progress.value = 70
 
     const encryptedBlob = new Blob([encrypted.encryptedData], { type: 'application/octet-stream' })
@@ -64,7 +68,8 @@ async function handleEncrypt() {
       type: 'application/octet-stream',
     })
 
-    progress.value = 100
+    emit('encrypting', 90)
+    progress.value = 90
 
     emit('upload', {
       encryptedFile,
@@ -74,7 +79,8 @@ async function handleEncrypt() {
       fileSize: file.value.size,
     })
 
-    file.value = null
+    emit('encrypting', 100)
+    progress.value = 100
   } catch (err) {
     emit('error', err instanceof Error ? err.message : 'Encryption failed')
   } finally {
