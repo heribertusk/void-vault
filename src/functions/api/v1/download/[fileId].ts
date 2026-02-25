@@ -157,33 +157,20 @@ export const onRequestPost = async (
     .bind(fileId)
     .run()
 
-  const fileData = await r2Object.arrayBuffer()
+  await env.DB.prepare('UPDATE vault_files SET download_count = download_count + 1 WHERE id = ?')
+    .bind(fileId)
+    .run()
 
-  const bytes = new Uint8Array(fileData)
-  let binary = ''
-  const len = bytes.byteLength
-  for (let i = 0; i < len; i++) {
-    binary += String.fromCharCode(bytes[i])
-  }
-  const base64Data = btoa(binary)
-
-  return new Response(
-    JSON.stringify({
-      success: true,
-      data: {
-        encryptedData: base64Data,
-        originalName: file.original_name,
-        mimeType: file.mime_type,
-        iv: file.iv,
-        fileSize: fileData.byteLength,
-      },
-    }),
-    {
-      status: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Cache-Control': 'no-store',
-      },
-    }
-  )
+  return new Response(r2Object.body, {
+    status: 200,
+    headers: {
+      'Content-Type': 'application/octet-stream',
+      'Content-Disposition': `attachment; filename="${encodeURIComponent(file.original_name)}"`,
+      'X-Content-Type-Options': 'nosniff',
+      'X-File-Name': encodeURIComponent(file.original_name),
+      'X-File-Mime-Type': file.mime_type,
+      'X-File-IV': file.iv,
+      'Cache-Control': 'no-store, no-cache',
+    },
+  })
 }

@@ -12,13 +12,6 @@ interface FileInfoResponse {
   iv: string
 }
 
-interface DownloadResponse {
-  encryptedData: string
-  originalName: string
-  mimeType: string
-  iv: string
-}
-
 const route = useRoute()
 const { triggerDownload, extractKeyFromUrl } = useDecryption()
 const { decryptFile } = useEncryption()
@@ -82,21 +75,20 @@ async function handleDownload() {
       throw new Error(data.error?.message || 'Failed to download file')
     }
 
-    const data = (await response.json()) as ApiResponse<DownloadResponse>
+    // Read encrypted data as binary array buffer
+    const encryptedData = await response.arrayBuffer()
 
-    if (!data.success || !data.data) {
-      throw new Error(data.error?.message || 'Invalid response')
+    // Extract metadata from response headers
+    const originalName = decodeURIComponent(response.headers.get('X-File-Name') || '')
+    const mimeType = response.headers.get('X-File-Mime-Type') || 'application/octet-stream'
+    const iv = response.headers.get('X-File-IV') || ''
+
+    if (!iv) {
+      throw new Error('Missing IV from response headers')
     }
 
-    const { encryptedData, originalName, mimeType, iv } = data.data
-
-    const binaryString = atob(encryptedData)
-    const bytes = new Uint8Array(binaryString.length)
-    for (let i = 0; i < binaryString.length; i++) {
-      bytes[i] = binaryString.charCodeAt(i)
-    }
-
-    const decryptedBuffer = await decryptFile(bytes.buffer, keyHex, iv)
+    // Decrypt the binary data
+    const decryptedBuffer = await decryptFile(encryptedData, keyHex, iv)
 
     const blob = new Blob([decryptedBuffer], { type: mimeType })
 
@@ -126,35 +118,18 @@ onMounted(() => {
   <div class="min-h-screen bg-gray-900 flex items-center justify-center p-4">
     <div class="max-w-md w-full bg-gray-800 rounded-lg shadow-xl p-8">
       <div class="text-center">
-        <h1 class="text-2xl font-bold text-white mb-2">
-          VoidVault
-        </h1>
-        <p class="text-gray-400 mb-8">
-          Secure File Download
-        </p>
+        <h1 class="text-2xl font-bold text-white mb-2">VoidVault</h1>
+        <p class="text-gray-400 mb-8">Secure File Download</p>
       </div>
 
-      <div
-        v-if="loading"
-        class="text-center py-8"
-      >
+      <div v-if="loading" class="text-center py-8">
         <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4" />
-        <p class="text-gray-400">
-          Loading file info...
-        </p>
+        <p class="text-gray-400">Loading file info...</p>
       </div>
 
-      <div
-        v-else-if="error"
-        class="text-center py-8"
-      >
+      <div v-else-if="error" class="text-center py-8">
         <div class="text-red-400 mb-4">
-          <svg
-            class="w-16 h-16 mx-auto"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
+          <svg class="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path
               stroke-linecap="round"
               stroke-linejoin="round"
@@ -163,24 +138,16 @@ onMounted(() => {
             />
           </svg>
         </div>
-        <p class="text-red-400 text-lg mb-2">
-          Download Failed
-        </p>
+        <p class="text-red-400 text-lg mb-2">Download Failed</p>
         <p class="text-gray-400">
           {{ error }}
         </p>
-        <p
-          v-if="!hasKey"
-          class="text-yellow-400 text-sm mt-4"
-        >
+        <p v-if="!hasKey" class="text-yellow-400 text-sm mt-4">
           No decryption key found. Make sure you have the complete URL.
         </p>
       </div>
 
-      <div
-        v-else-if="fileInfo"
-        class="space-y-6"
-      >
+      <div v-else-if="fileInfo" class="space-y-6">
         <div class="bg-gray-700 rounded-lg p-4">
           <div class="flex items-center space-x-3">
             <svg
@@ -207,10 +174,7 @@ onMounted(() => {
           </div>
         </div>
 
-        <div
-          v-if="!hasKey"
-          class="bg-yellow-900/30 border border-yellow-500 rounded-lg p-4"
-        >
+        <div v-if="!hasKey" class="bg-yellow-900/30 border border-yellow-500 rounded-lg p-4">
           <p class="text-yellow-400 text-sm">
             Warning: No decryption key found in URL. You need the complete link to download this
             file.
@@ -226,13 +190,7 @@ onMounted(() => {
             v-if="downloading"
             class="animate-spin rounded-full h-5 w-5 border-b-2 border-white"
           />
-          <svg
-            v-else
-            class="w-5 h-5"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
+          <svg v-else class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path
               stroke-linecap="round"
               stroke-linejoin="round"
