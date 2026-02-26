@@ -1,6 +1,72 @@
 import type { Env } from '@utils/r2-client'
 import { downloadFromR2 } from '@utils/r2-client'
 
+export const onRequestHead = async (
+  context: EventContext<Env, string, Record<string, unknown>>
+): Promise<Response> => {
+  const { env, params } = context
+  const fileId = params.fileId as string | undefined
+
+  if (!fileId || typeof fileId !== 'string') {
+    return new Response(null, {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+
+  const file = await env.DB.prepare(
+    `SELECT
+        id, original_name, file_size, mime_type,
+        download_count, max_downloads, expires_at
+      FROM vault_files
+      WHERE id = ?`
+  )
+    .bind(fileId)
+    .first<{
+      id: string
+      original_name: string
+      file_size: number
+      mime_type: string
+      download_count: number
+      max_downloads: number
+      expires_at: string
+    }>()
+
+  if (!file) {
+    return new Response(null, {
+      status: 404,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+
+  const now = new Date()
+  const expiresAt = new Date(file.expires_at)
+
+  if (now > expiresAt) {
+    return new Response(null, {
+      status: 410,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+
+  if (file.max_downloads > 0 && file.download_count >= file.max_downloads) {
+    return new Response(null, {
+      status: 410,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+
+  return new Response(null, {
+    status: 200,
+    headers: {
+      'Content-Type': 'application/json',
+      'Content-Length': file.file_size.toString(),
+      'X-File-Name': encodeURIComponent(file.original_name),
+      'X-File-Mime-Type': file.mime_type,
+    },
+  })
+}
+
 export const onRequestGet = async (
   context: EventContext<Env, string, Record<string, unknown>>
 ): Promise<Response> => {
@@ -152,10 +218,6 @@ export const onRequestPost = async (
       { status: 404, headers: { 'Content-Type': 'application/json' } }
     )
   }
-
-  await env.DB.prepare('UPDATE vault_files SET download_count = download_count + 1 WHERE id = ?')
-    .bind(fileId)
-    .run()
 
   await env.DB.prepare('UPDATE vault_files SET download_count = download_count + 1 WHERE id = ?')
     .bind(fileId)
